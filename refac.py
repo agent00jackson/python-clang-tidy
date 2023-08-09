@@ -2,21 +2,13 @@
 import clang.cindex
 import os
 
-# Create an index object that will parse the source file
-index = clang.cindex.Index.create()
-
-# Parse the source file and get the translation unit cursor
-FILE_NAME = "test.cpp"
-tu = index.parse(FILE_NAME)
-cursor = tu.cursor
-
 # Define a function that will recursively traverse the AST and replace C-style casts
-def replace_casts(node):
+def replace_casts(node, tu, file_name):
     # Iterate over the children of the current node
     for child in node.get_children():
         # If the child is a C-style cast expression, get its source range and type
         child_file = child.location.file
-        if child_file is not None and os.path.samefile(child_file.name, FILE_NAME):
+        if child_file is not None and os.path.samefile(child_file.name, file_name):
             if child.kind == clang.cindex.CursorKind.CSTYLE_CAST_EXPR:
                 cast_range = child.extent
                 cast_type = child.type.spelling
@@ -36,13 +28,40 @@ def replace_casts(node):
             # Recursively traverse the child node
             replace_casts(child)
 
-# Read the source file as a string
-with open(FILE_NAME) as f:
-    source_code = f.read()
+def generate_new_path(old_path):
+    # Split the old path into directory and file name
+    old_dir, old_name = os.path.split(old_path)
 
-# Call the replace_casts function on the root cursor
-replace_casts(cursor)
+    # Replace the test directory with test_output
+    new_dir = old_dir.replace("test", "test-output")
 
-# Write the modified source code to a new file
-with open(f'mod_{FILE_NAME}', "w") as f:
-    f.write(source_code)
+    # Join the new directory and file name
+    new_path = os.path.join(new_dir, old_name)
+
+    # Return the new path
+    return new_path
+
+
+def do_refactors(testing=False):
+    # Create an index object that will parse the source file
+    index = clang.cindex.Index.create()
+
+    # Parse the source file and get the translation unit cursor
+    FILE_NAME = "test/test.cpp"
+
+    # Read the source file as a string
+    with open(FILE_NAME) as f:
+        source_code = f.read()
+
+    tu = index.parse(FILE_NAME)
+    cursor = tu.cursor
+    # Call the replace_casts function on the root cursor
+    replace_casts(cursor, tu, FILE_NAME)
+
+    new_file = FILE_NAME
+    if testing:
+        new_file = generate_new_path(FILE_NAME)
+
+    # Write the modified source code to a new file
+    with open(new_file, "w") as f:
+        f.write(source_code)
